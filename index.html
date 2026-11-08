@@ -79,6 +79,8 @@
   .sheet select{width:100%;font:inherit;font-size:15px;padding:12px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--ink)}
   .sheet input{width:100%;font:inherit;font-size:15px;padding:12px;border-radius:12px;border:1px solid var(--line)}
   .sheet .note{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
+  .sheet label.check{display:flex;align-items:center;gap:10px;font-size:15px;margin-top:18px}
+  .sheet label.check input{width:22px;height:22px;padding:0;margin:0;flex:none}
   .sheet .actions{display:flex;gap:10px;margin-top:18px}
   .btn{flex:1;font:inherit;font-weight:700;font-size:15px;padding:13px;border-radius:12px;border:0;cursor:pointer}
   .btn.primary{background:var(--brand);color:#fff}
@@ -154,6 +156,8 @@
       <input id="mmEmail" type="email" placeholder="you@example.com" autocomplete="off">
       <div class="note">Không có email: khoảng 5.000 ký tự/ngày. Có email: khoảng 50.000 ký tự/ngày. Chất lượng dịch đơn giản hơn Gemini/OpenAI.</div>
     </div>
+    <label class="check"><input id="autoSpeak" type="checkbox"> Tự động đọc to bản dịch</label>
+    <div class="note">Trên iPhone, nếu micro hay báo "aborted", hãy tắt mục này. Vẫn nghe được bằng nút "Nghe lại".</div>
     <div class="actions">
       <button class="btn ghost" id="closeSettings">Đóng</button>
       <button class="btn primary" id="saveSettings">Lưu</button>
@@ -183,12 +187,12 @@ const UI = {
   vi: { tap:"Bấm để nói tiếng Việt", listening:"Đang nghe… bấm lần nữa để dừng", translating:"Đang dịch",
         you:"Bạn nói", tr:"Bản dịch", ph:"Bấm nút micro và nói…", replay:"Nghe lại", copy:"Sao chép", copied:"Đã chép",
         nokey:"Chưa có API key — mở ⚙️ để nhập.", nosupport:"Trình duyệt không hỗ trợ nhận giọng nói. Hãy dùng Chrome.",
-        nomic:"Không có quyền micro. Hãy cho phép micro trong trình duyệt.", nothing:"Không nghe thấy gì, thử lại nhé.",
+        nomic:"Không có quyền micro. Hãy cho phép micro trong trình duyệt.", nothing:"Không nghe thấy gì, thử lại nhé.", again:"iPhone vừa ngắt micro — bấm micro lần nữa.",
         history:"Lịch sử", from:"Nói", to:"Dịch sang" },
   en: { tap:"Tap to speak English", listening:"Listening… tap again to stop", translating:"Translating",
         you:"You said", tr:"Translation", ph:"Tap the mic and speak…", replay:"Replay", copy:"Copy", copied:"Copied",
         nokey:"No API key yet — open ⚙️ to add it.", nosupport:"This browser can't do speech recognition. Please use Chrome.",
-        nomic:"Microphone blocked. Please allow the mic in your browser.", nothing:"Didn't catch that, please try again.",
+        nomic:"Microphone blocked. Please allow the mic in your browser.", nothing:"Didn't catch that, please try again.", again:"iPhone cut the mic — tap the mic again.",
         history:"History", from:"Speak", to:"Translate to" }
 };
 
@@ -260,6 +264,7 @@ $("openSettings").onclick = () => {
   draft = {};
   $("provider").value = provider();
   $("mmEmail").value = store.get("vt-mm-email", "");
+  $("autoSpeak").checked = store.get("vt-autospeak", "1") === "1";
   fillProviderFields(provider());
   $("sheetBg").classList.add("show");
 };
@@ -280,6 +285,7 @@ $("saveSettings").onclick = () => {
   }
   store.set("vt-provider", p);
   store.set("vt-mm-email", $("mmEmail").value.trim());
+  store.set("vt-autospeak", $("autoSpeak").checked ? "1" : "0");
   $("sheetBg").classList.remove("show");
   setStatus(t().tap);
 };
@@ -292,11 +298,14 @@ $("mic").onclick = () => {
   const p = provider();
   if(PROVIDERS[p].needsKey && !keyFor(p)){ setStatus(t().nokey, true); $("openSettings").click(); return; }
   if(recognizing){ userStopped = true; try{ rec.stop(); }catch(e){} return; }
-  if(starting) return;
-  startListening(0);
+  // start straight from the tap: iPhone only trusts the mic when it opens inside the tap itself
+  try{ speechSynthesis.cancel(); }catch(e){}
+  openMic(0);
 };
 
-let starting = false, userStopped = false;
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+            (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let userStopped = false;
 
 function killOldRec(){
   if(!rec) return;
@@ -305,27 +314,16 @@ function killOldRec(){
   try{ old.abort(); }catch(e){}
 }
 
-function startListening(attempt){
-  starting = true;
-  userStopped = false;
-  let wait = 150;
-  try{
-    if(speechSynthesis.speaking || speechSynthesis.pending) wait = 600;
-    speechSynthesis.cancel();
-  }catch(e){}
-  killOldRec();
-  setStatus(t().listening);
-  // give iPhone time to release the speaker before opening the mic
-  setTimeout(() => { starting = false; openMic(attempt); }, attempt ? 500 : wait);
-}
-
 function openMic(attempt){
+  killOldRec();
+  userStopped = false;
   finalText = "";
+  $("src").textContent = "";
   let retrying = false;
   rec = new SR();
   rec.lang = LANGS[from].speech;
   rec.interimResults = true;
-  rec.continuous = true;
+  rec.continuous = !IOS;   // iPhone: one sentence per tap is far more reliable
   rec.maxAlternatives = 1;
 
   rec.onstart = () => {
@@ -348,11 +346,12 @@ function openMic(attempt){
   };
   rec.onerror = e => {
     const heard = (finalText || $("src").textContent).trim();
-    if(e.error === "aborted" && !userStopped && !heard && attempt < 2){
+    if(e.error === "aborted" && !userStopped && !heard && attempt < 1){
       retrying = true;            // iPhone cancelled the mic: quietly try again
       return;
     }
     if(e.error === "aborted" && heard) return;   // keep what was heard and translate it
+    if(e.error === "aborted"){ setStatus(t().again, true); return; }
     if(e.error === "not-allowed" || e.error === "service-not-allowed") setStatus(t().nomic, true);
     else if(e.error === "no-speech") setStatus(t().nothing, true);
     else setStatus("⚠️ " + e.error, true);
@@ -361,7 +360,7 @@ function openMic(attempt){
     recognizing = false;
     $("mic").classList.remove("rec");
     $("swap").disabled = false;
-    if(retrying){ startListening(attempt + 1); return; }
+    if(retrying){ setTimeout(() => openMic(attempt + 1), 700); return; }
     const text = (finalText || $("src").textContent).trim();
     $("src").className = "src";
     if(text) translate(text);
@@ -456,7 +455,7 @@ function showResult(src, out, target){
   $("out").textContent = out;
   $("replay").classList.add("show"); $("copy").classList.add("show");
   setStatus(t().tap);
-  speak(out, target);
+  if(store.get("vt-autospeak", "1") === "1") speak(out, target);
   history.unshift({ src, out, target });
   history = history.slice(0, 20);
   renderHistory();
