@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6f5c">
+<title>Dịch giọng nói Việt ⇄ Anh</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f3ec; --card:#fff; --ink:#1f2a2e; --muted:#5f6b70; --line:#e3ded3;
+    --brand:#1f6f5c; --brand-soft:#e3f1ec; --rec:#d64545; --rec-soft:#fbe9e7;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Be Vietnam Pro",system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+  .wrap{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;
+    padding:calc(16px + env(safe-area-inset-top)) 16px calc(20px + env(safe-area-inset-bottom))}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  h1{font-size:19px;margin:0;font-weight:800}
+  .icon-btn{border:0;background:var(--card);width:42px;height:42px;border-radius:12px;font-size:20px;
+    cursor:pointer;box-shadow:0 1px 0 var(--line)}
+
+  /* language toggle */
+  .toggle{display:flex;align-items:center;background:var(--card);border-radius:16px;padding:6px;
+    box-shadow:0 1px 0 var(--line);margin-bottom:14px}
+  .side{flex:1;text-align:center;padding:10px 6px;border-radius:12px;font-weight:700;font-size:15px}
+  .side.from{background:var(--brand-soft);color:var(--brand)}
+  .side small{display:block;font-weight:500;font-size:11px;color:var(--muted);margin-top:2px}
+  .swap{border:0;background:var(--brand);color:#fff;width:46px;height:46px;border-radius:50%;
+    font-size:20px;cursor:pointer;margin:0 6px;flex:none;transition:transform .3s}
+  .swap.spin{transform:rotate(180deg)}
+
+  /* result panels */
+  .panel{background:var(--card);border-radius:18px;padding:14px 16px;margin-bottom:12px;
+    box-shadow:0 1px 0 var(--line),0 6px 18px rgba(31,42,46,.05);min-height:96px}
+  .label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .src{font-size:18px;line-height:1.45;color:var(--ink);white-space:pre-wrap}
+  .src.interim{color:var(--muted)}
+  .out{font-size:22px;line-height:1.45;font-weight:700;color:var(--brand);white-space:pre-wrap}
+  .placeholder{color:#a8b0b3;font-weight:500}
+  .row{display:flex;gap:8px;margin-top:10px}
+  .small-btn{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;
+    font:inherit;font-size:13px;font-weight:600;cursor:pointer;display:none}
+  .small-btn.show{display:inline-flex;align-items:center;gap:6px}
+  .dots::after{content:"…";animation:dots 1s steps(3,end) infinite}
+  @keyframes dots{0%{content:"."}33%{content:".."}66%{content:"..."}}
+
+  /* mic */
+  .spacer{flex:1}
+  .mic-area{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:10px}
+  .mic{width:96px;height:96px;border-radius:50%;border:0;background:var(--brand);color:#fff;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(31,111,92,.35);
+    transition:background .2s,transform .1s}
+  .mic:active{transform:scale(.96)}
+  .mic.rec{background:var(--rec);animation:ring 1.2s infinite}
+  .mic:disabled{opacity:.5}
+  @keyframes ring{0%{box-shadow:0 0 0 0 rgba(214,69,69,.5)}100%{box-shadow:0 0 0 22px rgba(214,69,69,0)}}
+  .status{font-size:14px;color:var(--muted);font-weight:600;text-align:center;min-height:20px}
+  .status.err{color:var(--rec)}
+
+  /* history */
+  details{margin-top:16px}
+  summary{font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+  .hist{list-style:none;padding:0;margin:8px 0 0}
+  .hist li{background:var(--card);border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:14px;cursor:pointer}
+  .hist .h-src{color:var(--muted)}
+  .hist .h-out{font-weight:700;color:var(--brand)}
+
+  /* settings sheet */
+  .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:flex-end;justify-content:center;z-index:10}
+  .sheet-bg.show{display:flex}
+  .sheet{background:var(--card);width:100%;max-width:520px;border-radius:20px 20px 0 0;
+    padding:20px 18px calc(24px + env(safe-area-inset-bottom))}
+  .sheet h2{margin:0 0 12px;font-size:18px}
+  .sheet label{display:block;font-size:13px;font-weight:600;margin:12px 0 6px}
+  .sheet select{width:100%;font:inherit;font-size:15px;padding:12px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--ink)}
+  .sheet input{width:100%;font:inherit;font-size:15px;padding:12px;border-radius:12px;border:1px solid var(--line)}
+  .sheet .note{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
+  .sheet .actions{display:flex;gap:10px;margin-top:18px}
+  .btn{flex:1;font:inherit;font-weight:700;font-size:15px;padding:13px;border-radius:12px;border:0;cursor:pointer}
+  .btn.primary{background:var(--brand);color:#fff}
+  .btn.ghost{background:var(--bg);color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🎙️ Dịch giọng nói</h1>
+    <button class="icon-btn" id="openSettings" aria-label="Cài đặt">⚙️</button>
+  </header>
+
+  <div class="toggle">
+    <div class="side from" id="fromSide"></div>
+    <button class="swap" id="swap" aria-label="Đổi chiều dịch">⇄</button>
+    <div class="side" id="toSide"></div>
+  </div>
+
+  <div class="panel">
+    <div class="label" id="srcLabel"></div>
+    <div class="src" id="src"><span class="placeholder" id="srcPh"></span></div>
+  </div>
+
+  <div class="panel">
+    <div class="label" id="outLabel"></div>
+    <div class="out" id="out"><span class="placeholder">—</span></div>
+    <div class="row">
+      <button class="small-btn" id="replay">🔊 <span id="replayTxt">Nghe lại</span></button>
+      <button class="small-btn" id="copy">📋 <span id="copyTxt">Sao chép</span></button>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="mic-area">
+    <button class="mic" id="mic" aria-label="Bấm để nói">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor"/>
+        <path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/>
+      </svg>
+    </button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <details>
+    <summary id="histTitle">Lịch sử</summary>
+    <ul class="hist" id="hist"></ul>
+  </details>
+</div>
+
+<div class="sheet-bg" id="sheetBg">
+  <div class="sheet">
+    <h2>⚙️ Cài đặt</h2>
+    <label for="provider">Dịch vụ dịch</label>
+    <select id="provider">
+      <option value="gemini">Google Gemini (có gói miễn phí)</option>
+      <option value="openai">OpenAI</option>
+      <option value="mymemory">MyMemory (miễn phí, không cần key)</option>
+    </select>
+
+    <div id="keyBox">
+      <label for="key" id="keyLabel">API key</label>
+      <input id="key" type="password" autocomplete="off">
+      <div class="note" id="keyNote"></div>
+      <label for="model">Model</label>
+      <input id="model" type="text">
+      <div class="note">Nếu model báo lỗi (đã ngừng hỗ trợ), đổi sang model mới hơn của nhà cung cấp.</div>
+    </div>
+
+    <div id="mmBox">
+      <label for="mmEmail">Email (không bắt buộc)</label>
+      <input id="mmEmail" type="email" placeholder="you@example.com" autocomplete="off">
+      <div class="note">Không có email: khoảng 5.000 ký tự/ngày. Có email: khoảng 50.000 ký tự/ngày. Chất lượng dịch đơn giản hơn Gemini/OpenAI.</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="closeSettings">Đóng</button>
+      <button class="btn primary" id="saveSettings">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- config ---------- */
+const LANGS = {
+  vi: { name:"Tiếng Việt", flag:"🇻🇳", speech:"vi-VN", aiName:"Vietnamese" },
+  en: { name:"English",    flag:"🇬🇧", speech:"en-US", aiName:"English" }
+};
+const PROVIDERS = {
+  gemini:   { label:"Gemini API key", ph:"AIza...", model:"gemini-2.5-flash", needsKey:true,
+              note:"Lấy key miễn phí tại aistudio.google.com → Get API key. Key chỉ lưu trên thiết bị này." },
+  openai:   { label:"OpenAI API key", ph:"sk-...", model:"gpt-4o-mini", needsKey:true,
+              note:"Lấy key tại platform.openai.com. Key chỉ lưu trên thiết bị này." },
+  mymemory: { needsKey:false }
+};
+const provider = () => store.get("vt-provider", "gemini");
+const keyFor   = p => store.get("vt-key-" + p, p === "openai" ? store.get("vt-key", "") : "");
+const modelFor = p => store.get("vt-model-" + p, PROVIDERS[p].model || "");
+
+/* UI text follows the speaker's language */
+const UI = {
+  vi: { tap:"Bấm để nói tiếng Việt", listening:"Đang nghe… bấm lần nữa để dừng", translating:"Đang dịch",
+        you:"Bạn nói", tr:"Bản dịch", ph:"Bấm nút micro và nói…", replay:"Nghe lại", copy:"Sao chép", copied:"Đã chép",
+        nokey:"Chưa có API key — mở ⚙️ để nhập.", nosupport:"Trình duyệt không hỗ trợ nhận giọng nói. Hãy dùng Chrome.",
+        nomic:"Không có quyền micro. Hãy cho phép micro trong trình duyệt.", nothing:"Không nghe thấy gì, thử lại nhé.",
+        history:"Lịch sử", from:"Nói", to:"Dịch sang" },
+  en: { tap:"Tap to speak English", listening:"Listening… tap again to stop", translating:"Translating",
+        you:"You said", tr:"Translation", ph:"Tap the mic and speak…", replay:"Replay", copy:"Copy", copied:"Copied",
+        nokey:"No API key yet — open ⚙️ to add it.", nosupport:"This browser can't do speech recognition. Please use Chrome.",
+        nomic:"Microphone blocked. Please allow the mic in your browser.", nothing:"Didn't catch that, please try again.",
+        history:"History", from:"Speak", to:"Translate to" }
+};
+
+/* ---------- storage (safe) ---------- */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : v; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+};
+
+let from = store.get("vt-from", "vi");
+let lastOut = "", lastTo = "", history = [];
+let recognizing = false, finalText = "", rec = null;
+
+const $ = id => document.getElementById(id);
+const to = () => from === "vi" ? "en" : "vi";
+const t = () => UI[from];
+
+/* ---------- UI ---------- */
+function paint(){
+  const F = LANGS[from], T = LANGS[to()];
+  $("fromSide").innerHTML = `${F.flag} ${F.name}<small>${t().from}</small>`;
+  $("toSide").innerHTML   = `${T.flag} ${T.name}<small>${t().to}</small>`;
+  $("srcLabel").textContent = `${F.flag} ${t().you}`;
+  $("outLabel").textContent = `${T.flag} ${t().tr}`;
+  $("srcPh").textContent = t().ph;
+  $("replayTxt").textContent = t().replay;
+  $("copyTxt").textContent = t().copy;
+  $("histTitle").textContent = `${t().history} (${history.length})`;
+  if(!recognizing) setStatus(t().tap);
+}
+function setStatus(msg, err=false, dots=false){
+  const s = $("status"); s.textContent = msg;
+  s.classList.toggle("err", err); s.classList.toggle("dots", dots);
+}
+
+$("swap").onclick = () => {
+  if(recognizing) return;
+  from = to(); store.set("vt-from", from);
+  $("swap").classList.toggle("spin");
+  resetPanels(); paint();
+};
+function resetPanels(){
+  $("src").className = "src";
+  $("src").innerHTML = `<span class="placeholder" id="srcPh">${t().ph}</span>`;
+  $("out").innerHTML = `<span class="placeholder">—</span>`;
+  $("replay").classList.remove("show"); $("copy").classList.remove("show");
+}
+
+/* ---------- settings ---------- */
+/* draft values while the sheet is open, so switching provider keeps what was typed */
+let draft = {};
+function fillProviderFields(p){
+  const P = PROVIDERS[p];
+  $("keyBox").style.display = P.needsKey ? "block" : "none";
+  $("mmBox").style.display  = p === "mymemory" ? "block" : "none";
+  if(P.needsKey){
+    $("keyLabel").textContent = P.label;
+    $("key").placeholder = P.ph;
+    $("keyNote").textContent = P.note;
+    $("key").value   = draft[p]?.key   ?? keyFor(p);
+    $("model").value = draft[p]?.model ?? modelFor(p);
+    $("model").placeholder = P.model;
+  }
+}
+function saveDraft(p){
+  if(PROVIDERS[p].needsKey) draft[p] = { key:$("key").value.trim(), model:$("model").value.trim() };
+}
+$("openSettings").onclick = () => {
+  draft = {};
+  $("provider").value = provider();
+  $("mmEmail").value = store.get("vt-mm-email", "");
+  fillProviderFields(provider());
+  $("sheetBg").classList.add("show");
+};
+let shownProvider = null;
+$("provider").onfocus = () => { shownProvider = $("provider").value; };
+$("provider").onchange = () => {
+  saveDraft(shownProvider || provider());
+  shownProvider = $("provider").value;
+  fillProviderFields(shownProvider);
+};
+$("closeSettings").onclick = () => $("sheetBg").classList.remove("show");
+$("saveSettings").onclick = () => {
+  const p = $("provider").value;
+  saveDraft(p);
+  for(const [name, d] of Object.entries(draft)){
+    store.set("vt-key-" + name, d.key);
+    store.set("vt-model-" + name, d.model || PROVIDERS[name].model);
+  }
+  store.set("vt-provider", p);
+  store.set("vt-mm-email", $("mmEmail").value.trim());
+  $("sheetBg").classList.remove("show");
+  setStatus(t().tap);
+};
+
+/* ---------- speech recognition ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+$("mic").onclick = () => {
+  if(!SR){ setStatus(t().nosupport, true); return; }
+  const p = provider();
+  if(PROVIDERS[p].needsKey && !keyFor(p)){ setStatus(t().nokey, true); $("openSettings").click(); return; }
+  recognizing ? rec.stop() : startListening();
+};
+
+function startListening(){
+  try{ speechSynthesis.cancel(); }catch(e){}
+  finalText = "";
+  rec = new SR();
+  rec.lang = LANGS[from].speech;
+  rec.interimResults = true;
+  rec.continuous = true;
+  rec.maxAlternatives = 1;
+
+  rec.onstart = () => {
+    recognizing = true;
+    $("mic").classList.add("rec");
+    $("swap").disabled = true;
+    setStatus(t().listening);
+    $("src").className = "src interim"; $("src").textContent = "";
+    $("out").innerHTML = `<span class="placeholder">—</span>`;
+    $("replay").classList.remove("show"); $("copy").classList.remove("show");
+  };
+  rec.onresult = e => {
+    let interim = "";
+    for(let i = e.resultIndex; i < e.results.length; i++){
+      const r = e.results[i];
+      if(r.isFinal) finalText += r[0].transcript + " ";
+      else interim += r[0].transcript;
+    }
+    $("src").textContent = (finalText + interim).trim();
+  };
+  rec.onerror = e => {
+    if(e.error === "not-allowed" || e.error === "service-not-allowed") setStatus(t().nomic, true);
+    else if(e.error === "no-speech") setStatus(t().nothing, true);
+    else setStatus("⚠️ " + e.error, true);
+  };
+  rec.onend = () => {
+    recognizing = false;
+    $("mic").classList.remove("rec");
+    $("swap").disabled = false;
+    const text = (finalText || $("src").textContent).trim();
+    $("src").className = "src";
+    if(text) translate(text);
+    else if(!$("status").classList.contains("err")) setStatus(t().nothing, true);
+  };
+  try{ rec.start(); }catch(e){ setStatus("⚠️ " + e.message, true); }
+}
+
+/* ---------- translation (OpenAI) ---------- */
+async function translate(text){
+  const F = LANGS[from], T = LANGS[to()];
+  const target = to();
+  $("src").textContent = text;
+  $("mic").disabled = true;
+  setStatus(t().translating, false, true);
+  const prompt =
+    `You are a live interpreter. Translate the user's spoken ${F.aiName} into natural, everyday ${T.aiName}. ` +
+    `The text comes from speech recognition and may lack punctuation or contain small recognition errors — infer the intended meaning. ` +
+    `Reply with the translation only: no quotes, no notes, no transliteration.`;
+  try{
+    const p = provider();
+    let out;
+    if(p === "openai")      out = await viaOpenAI(prompt, text);
+    else if(p === "gemini") out = await viaGemini(prompt, text);
+    else                    out = await viaMyMemory(text, from, target);
+    if(!out) throw new Error("Empty translation");
+    showResult(text, out.trim(), target);
+  }catch(err){
+    setStatus("⚠️ " + err.message, true);
+  }finally{
+    $("mic").disabled = false;
+  }
+}
+
+async function viaOpenAI(prompt, text){
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "Authorization":"Bearer " + keyFor("openai") },
+    body: JSON.stringify({
+      model: modelFor("openai"), temperature: 0.2,
+      messages: [ { role:"system", content: prompt }, { role:"user", content: text } ]
+    })
+  });
+  const data = await res.json();
+  if(!res.ok) throw new Error("OpenAI: " + (data?.error?.message || ("HTTP " + res.status)));
+  return data.choices?.[0]?.message?.content || "";
+}
+
+async function viaGemini(prompt, text){
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+              encodeURIComponent(modelFor("gemini")) + ":generateContent?key=" + encodeURIComponent(keyFor("gemini"));
+  const res = await fetch(url, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [ { text: prompt } ] },
+      contents: [ { role:"user", parts: [ { text } ] } ],
+      generationConfig: { temperature: 0.2 }
+    })
+  });
+  const data = await res.json();
+  if(!res.ok) throw new Error("Gemini: " + (data?.error?.message || ("HTTP " + res.status)));
+  return (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+}
+
+/* MyMemory accepts ~500 bytes per request, so long speech is split by sentence */
+async function viaMyMemory(text, src, dst){
+  const parts = [], max = 450;
+  let cur = "";
+  for(const s of text.match(/[^.!?。]+[.!?。]*\s*/g) || [text]){
+    if(new Blob([cur + s]).size > max && cur){ parts.push(cur); cur = ""; }
+    cur += s;
+  }
+  if(cur) parts.push(cur);
+  const email = store.get("vt-mm-email", "");
+  const outs = [];
+  for(const part of parts){
+    let url = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(part.trim()) +
+              "&langpair=" + src + "|" + dst;
+    if(email) url += "&de=" + encodeURIComponent(email);
+    const res = await fetch(url);
+    const data = await res.json();
+    if(!res.ok || Number(data.responseStatus) !== 200)
+      throw new Error("MyMemory: " + (data.responseDetails || ("HTTP " + res.status)));
+    outs.push(data.responseData.translatedText);
+  }
+  return outs.join(" ");
+}
+
+function showResult(src, out, target){
+  lastOut = out; lastTo = target;
+  $("out").textContent = out;
+  $("replay").classList.add("show"); $("copy").classList.add("show");
+  setStatus(t().tap);
+  speak(out, target);
+  history.unshift({ src, out, target });
+  history = history.slice(0, 20);
+  renderHistory();
+}
+
+function renderHistory(){
+  $("hist").innerHTML = history.map((h,i) =>
+    `<li data-i="${i}"><div class="h-src">${esc(h.src)}</div><div class="h-out">${esc(h.out)}</div></li>`).join("");
+  $("hist").querySelectorAll("li").forEach(li => li.onclick = () => {
+    const h = history[li.dataset.i]; speak(h.out, h.target);
+  });
+  $("histTitle").textContent = `${t().history} (${history.length})`;
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+/* ---------- speech output ---------- */
+function speak(text, lang){
+  try{
+    if(!("speechSynthesis" in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const code = LANGS[lang].speech;
+    u.lang = code; u.rate = 0.95;
+    const v = speechSynthesis.getVoices().find(v => v.lang.replace("_","-") === code)
+           || speechSynthesis.getVoices().find(v => v.lang.startsWith(lang));
+    if(v) u.voice = v;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+if("speechSynthesis" in window) speechSynthesis.onvoiceschanged = () => {};
+
+$("replay").onclick = () => speak(lastOut, lastTo);
+$("copy").onclick = async () => {
+  try{ await navigator.clipboard.writeText(lastOut);
+       $("copyTxt").textContent = t().copied; setTimeout(() => $("copyTxt").textContent = t().copy, 1500);
+  }catch(e){}
+};
+
+paint();
+if(!SR) setStatus(t().nosupport, true);
+</script>
+</body>
+</html>
