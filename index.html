@@ -291,12 +291,37 @@ $("mic").onclick = () => {
   if(!SR){ setStatus(t().nosupport, true); return; }
   const p = provider();
   if(PROVIDERS[p].needsKey && !keyFor(p)){ setStatus(t().nokey, true); $("openSettings").click(); return; }
-  recognizing ? rec.stop() : startListening();
+  if(recognizing){ userStopped = true; try{ rec.stop(); }catch(e){} return; }
+  if(starting) return;
+  startListening(0);
 };
 
-function startListening(){
-  try{ speechSynthesis.cancel(); }catch(e){}
+let starting = false, userStopped = false;
+
+function killOldRec(){
+  if(!rec) return;
+  const old = rec; rec = null;
+  old.onstart = old.onresult = old.onerror = old.onend = null;
+  try{ old.abort(); }catch(e){}
+}
+
+function startListening(attempt){
+  starting = true;
+  userStopped = false;
+  let wait = 150;
+  try{
+    if(speechSynthesis.speaking || speechSynthesis.pending) wait = 600;
+    speechSynthesis.cancel();
+  }catch(e){}
+  killOldRec();
+  setStatus(t().listening);
+  // give iPhone time to release the speaker before opening the mic
+  setTimeout(() => { starting = false; openMic(attempt); }, attempt ? 500 : wait);
+}
+
+function openMic(attempt){
   finalText = "";
+  let retrying = false;
   rec = new SR();
   rec.lang = LANGS[from].speech;
   rec.interimResults = true;
@@ -322,6 +347,12 @@ function startListening(){
     $("src").textContent = (finalText + interim).trim();
   };
   rec.onerror = e => {
+    const heard = (finalText || $("src").textContent).trim();
+    if(e.error === "aborted" && !userStopped && !heard && attempt < 2){
+      retrying = true;            // iPhone cancelled the mic: quietly try again
+      return;
+    }
+    if(e.error === "aborted" && heard) return;   // keep what was heard and translate it
     if(e.error === "not-allowed" || e.error === "service-not-allowed") setStatus(t().nomic, true);
     else if(e.error === "no-speech") setStatus(t().nothing, true);
     else setStatus("⚠️ " + e.error, true);
@@ -330,6 +361,7 @@ function startListening(){
     recognizing = false;
     $("mic").classList.remove("rec");
     $("swap").disabled = false;
+    if(retrying){ startListening(attempt + 1); return; }
     const text = (finalText || $("src").textContent).trim();
     $("src").className = "src";
     if(text) translate(text);
